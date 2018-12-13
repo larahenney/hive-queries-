@@ -1,0 +1,51 @@
+-- Patent Dynamic Table
+
+create table temp_patents(col_value STRING);
+
+LOAD DATA INPATH '/user/maria_dev/apat63_99.txt' OVERWRITE INTO TABLE temp_patents;  
+ 
+DROP table patents_dynamic;
+
+SET hive.exec.dynamic.partition=true;
+SET hive.exec.dynamic.partition.mode=nonstrict;
+
+CREATE external table patents_dynamic
+(patent STRING, country STRING, classNum INT)
+PARTITIONED BY (gyear INT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+ESCAPED BY "" LINES TERMINATED BY '\n'
+STORED AS textfile
+LOCATION "/user/maria_dev/patents"
+tblproperties("skip.header.line.count"="1");
+
+SET hive.exec.dynamic.partition=true;
+SET hive.exec.dynamic.partition.mode=nonstrict;
+
+INSERT OVERWRITE TABLE patents_dynamic
+PARTITION (gyear)
+SELECT 
+	regexp_extract(col_value, '^(?:([^,]*),?){1}', 1) patent,
+	regexp_extract(col_value, '^(?:([^,]*),?){5}', 1) country,
+	regexp_extract(col_value, '^(?:([^,]*),?){10}', 1) classNum,
+	regexp_extract(col_value, '^(?:([^,]*),?){2}', 1) gyear
+
+from temp_patents;
+
+-- Class Index Table
+
+drop table classes_index;
+
+create external table classes_index(nclass INT, title STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '	'
+LINES TERMINATED BY '\n'
+location "/user/maria_dev/classes_dir/"
+tblproperties("skip.header.line.count"="9");
+
+-- Joining to show both patent # and class title for a certain year
+
+SELECT p.patent, p.country, c.title, p.gyear
+FROM patents_dynamic p 
+JOIN classes_index c 
+ON p.classnum = c.nclass
+WHERE p.gyear = 1963;
